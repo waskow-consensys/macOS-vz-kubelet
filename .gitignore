@@ -18,4 +18,14 @@
 # vendor/
 
 # Go workspace file
-go.work
+go.work.sum
+
+# Build directory
+build/
+
+# CICD temp files
+.go/
+.mise/
+fastlane/Appfile
+fastlane/Matchfile
+ruby/

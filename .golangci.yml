@@ -1,0 +1,102 @@
+run:
+  timeout: 5m
+  allow-parallel-runners: true
+
+issues:
+  # don't skip warning about doc comments
+  # don't exclude the default set of lint
+  exclude-use-default: false
+  # restore some of the defaults
+  # (fill in the rest as needed)
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - dupl
+        - goconst
+        - mirror
+        - ireturn
+    - path: "internal/data/*"
+      linters:
+        - forcetypeassert
+    - path: ".*/mocks/.*"
+      linters:
+        - forcetypeassert
+        - inamedparam
+linters:
+  disable-all: true
+  enable:
+    - dupl
+    - errcheck
+    - copyloopvar
+    - goconst
+    - gocyclo
+    - gofmt
+    - goimports
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    # - prealloc
+    - revive
+    - staticcheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - containedctx
+    - contextcheck
+    - decorder
+    - dogsled
+    - dupword
+    - durationcheck
+    - errchkjson
+    - errname
+    # - errorlint
+    - fatcontext
+    - forbidigo
+    - forcetypeassert
+    # - funlen
+    - gochecksumtype
+    # - gocritic
+    - goprintffuncname
+    - gosmopolitan
+    - grouper
+    - importas
+    - inamedparam
+    - intrange
+    - loggercheck
+    - makezero
+    - mirror
+    # - mnd
+    - musttag
+    # - nestif
+    - nilerr
+    - nilnil
+    - noctx
+    # - paralleltest
+    # - perfsprint
+    - predeclared
+    - reassign
+    - spancheck
+    - tagalign
+    - tagliatelle
+    # - testifylint
+    - testpackage
+    - thelper
+    - tparallel
+    - usestdlibvars
+    - wastedassign
+    - whitespace
+    # - wrapcheck
+    - ireturn
+
+linters-settings:
+  revive:
+    rules:
+      - name: comment-spacings
