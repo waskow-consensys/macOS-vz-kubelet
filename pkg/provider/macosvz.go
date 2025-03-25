@@ -11,14 +11,13 @@ import (
 	"github.com/agoda-com/macOS-vz-kubelet/internal/node"
 	"github.com/agoda-com/macOS-vz-kubelet/pkg/client"
 	"github.com/agoda-com/macOS-vz-kubelet/pkg/event"
+	"github.com/agoda-com/macOS-vz-kubelet/pkg/metrics"
 
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
-	"github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 
-	dto "github.com/prometheus/client_model/go"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -54,6 +53,8 @@ type MacOSVZProvider struct {
 	nodeIPAddress      string
 	platform           string
 	daemonEndpointPort int32
+
+	*metrics.MacOSVZPodMetricsProvider
 }
 
 // NewMacOSVZProvider creates a new MacOSVZ provider.
@@ -76,6 +77,7 @@ func NewMacOSVZProvider(ctx context.Context, vzClient client.VzClientInterface, 
 
 	p.eventRecorder = config.EventRecorder
 
+	p.MacOSVZPodMetricsProvider = metrics.NewMacOSVZPodMetricsProvider(p.nodeName, p.podLister, p.vzClient)
 	return p, nil
 }
 
@@ -328,28 +330,6 @@ func (p *MacOSVZProvider) AttachToContainer(ctx context.Context, namespace, podN
 	}()
 	log.G(ctx).Debug("Received AttachToContainer request")
 	return p.vzClient.AttachToContainer(ctx, namespace, podName, containerName, attach)
-}
-
-// GetStatsSummary gets the stats for the node, including running pods
-func (p *MacOSVZProvider) GetStatsSummary(ctx context.Context) (s *statsv1alpha1.Summary, err error) {
-	ctx, span := trace.StartSpan(ctx, "MacOSVZProvider.GetStatsSummary")
-	defer func() {
-		span.SetStatus(err)
-		span.End()
-	}()
-	log.G(ctx).Debug("Received GetStatsSummary request")
-	return nil, errNotImplemented
-}
-
-// GetMetricsResource gets the metrics for the node, including running pods
-func (p *MacOSVZProvider) GetMetricsResource(ctx context.Context) (mf []*dto.MetricFamily, err error) {
-	ctx, span := trace.StartSpan(ctx, "MacOSVZProvider.GetMetricsResource")
-	defer func() {
-		span.SetStatus(err)
-		span.End()
-	}()
-	log.G(ctx).Debug("Received GetMetricsResource request")
-	return nil, errNotImplemented
 }
 
 // PortForward forwards a local port to a port on the pod

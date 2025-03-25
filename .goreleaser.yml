@@ -30,8 +30,8 @@ builds:
       - mv "{{ dir .Path }}/MacOSVK" "{{ .Path }}/Contents/MacOS/"
 
 archives:
-  - format: zip
+  - formats: zip
     files:
     - LICENSE
-    - src: build/MacOSVK_darwin_arm64/MacOSVK.app
+    - src: build/MacOSVK_darwin_arm64_v8.0/MacOSVK.app
       dst: MacOSVK.app

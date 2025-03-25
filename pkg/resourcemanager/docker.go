@@ -3,6 +3,7 @@ package resourcemanager
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -27,8 +28,10 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
+	stats "k8s.io/kubelet/pkg/apis/stats/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -538,6 +541,70 @@ func (c *DockerClient) IsContainerPresent(ctx context.Context, podNs, podName, c
 
 	_, ok := c.data.GetContainerInfo(podNs, podName, containerName)
 	return ok
+}
+
+func (c *DockerClient) GetContainerStats(ctx context.Context, podNs, podName string, containerName string) (s stats.ContainerStats, err error) {
+	ctx, span := trace.StartSpan(ctx, "DockerClient.GetContainerStats")
+	defer func() {
+		span.SetStatus(err)
+		span.End()
+	}()
+
+	containerInfo, exists := c.data.GetContainerInfo(podNs, podName, containerName)
+	if !exists {
+		return s, errdefs.NotFound("container not found")
+	}
+
+	// Fetch stats for the container
+	statsResp, err := c.client.ContainerStats(ctx, containerInfo.ID, false)
+	if err != nil {
+		return s, fmt.Errorf("failed to get container stats: %w", err)
+	}
+	defer func() {
+		if closeErr := statsResp.Body.Close(); err != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close stats response body: %w", closeErr))
+		}
+	}()
+
+	// Decode the stats JSON
+	var statsData types.StatsJSON
+	if err := json.NewDecoder(statsResp.Body).Decode(&statsData); err != nil {
+		return s, fmt.Errorf("failed to decode stats: %w", err)
+	}
+
+	// Extract CPU usage in nano cores
+	cpuDelta := statsData.CPUStats.CPUUsage.TotalUsage - statsData.PreCPUStats.CPUUsage.TotalUsage
+	systemDelta := statsData.CPUStats.SystemUsage - statsData.PreCPUStats.SystemUsage
+	var cpuUsageNanoCores *uint64
+	if systemDelta > 0 && len(statsData.CPUStats.CPUUsage.PercpuUsage) > 0 {
+		cpuUsage := uint64(float64(cpuDelta) / float64(systemDelta) * 1e9)
+		cpuUsageNanoCores = &cpuUsage
+	}
+
+	// Extract CPU usage in core nano seconds
+	cpuUsageCoreNanoSeconds := statsData.CPUStats.CPUUsage.TotalUsage
+
+	// Extract memory usage
+	memoryUsageBytes := statsData.MemoryStats.Usage
+	memoryRSSBytes := statsData.MemoryStats.Stats["rss"]
+	memoryWorkingSetBytes := statsData.MemoryStats.Usage - statsData.MemoryStats.Stats["cache"]
+
+	// Prepare stats.ContainerStats
+	time := metav1.NewTime(time.Now())
+	return stats.ContainerStats{
+		Name: containerName,
+		CPU: &stats.CPUStats{
+			Time:                 time,
+			UsageNanoCores:       cpuUsageNanoCores,
+			UsageCoreNanoSeconds: &cpuUsageCoreNanoSeconds,
+		},
+		Memory: &stats.MemoryStats{
+			Time:            time,
+			UsageBytes:      &memoryUsageBytes,
+			WorkingSetBytes: &memoryWorkingSetBytes,
+			RSSBytes:        &memoryRSSBytes,
+		},
+	}, nil
 }
 
 // getActiveContainers lists all active containers that match the specified name prefix.

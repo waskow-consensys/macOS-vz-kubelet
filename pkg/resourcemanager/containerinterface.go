@@ -6,7 +6,10 @@ import (
 
 	"github.com/agoda-com/macOS-vz-kubelet/internal/volumes"
 	"github.com/agoda-com/macOS-vz-kubelet/pkg/resource"
+
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
+	stats "k8s.io/kubelet/pkg/apis/stats/v1alpha1"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -41,4 +44,5 @@ type ContainersClient interface {
 	ExecInContainer(ctx context.Context, namespace, name, containerName string, cmd []string, attach api.AttachIO) error
 	AttachToContainer(ctx context.Context, namespace, name, containerName string, attach api.AttachIO) error
 	IsContainerPresent(ctx context.Context, podNs, podName, containerName string) bool
+	GetContainerStats(ctx context.Context, podNs, podName string, containerName string) (stats.ContainerStats, error)
 }

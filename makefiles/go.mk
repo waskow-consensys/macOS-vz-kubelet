@@ -5,7 +5,7 @@ include makefiles/base.mk
 
 ### Variables
 
-GOLANGCILINT_VERSION ?= v1.61.0
+GOLANGCILINT_VERSION ?= v1.64.8
 GOTESTSUM_VERSION ?= v1.11.0
 GOCOV_VERSION ?= v1.1.0
 GOCOV_HTML_VERSION ?= v1.4.0

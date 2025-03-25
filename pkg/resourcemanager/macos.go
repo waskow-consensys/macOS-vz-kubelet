@@ -1,7 +1,9 @@
 package resourcemanager
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/Code-Hex/vz/v3"
 	vmdata "github.com/agoda-com/macOS-vz-kubelet/internal/data/vm"
+	vzio "github.com/agoda-com/macOS-vz-kubelet/internal/io"
 	"github.com/agoda-com/macOS-vz-kubelet/internal/node"
 	vzssh "github.com/agoda-com/macOS-vz-kubelet/internal/ssh"
 	"github.com/agoda-com/macOS-vz-kubelet/internal/volumes"
@@ -24,8 +27,10 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
+	stats "k8s.io/kubelet/pkg/apis/stats/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -432,6 +437,112 @@ func (c *MacOSClient) ExecInVirtualMachine(ctx context.Context, namespace, name 
 	}
 
 	return macOSSession.ExecuteCommand(ctx, info.Resource.Env(), cmd)
+}
+
+// GetVirtualMachineStats retrieves the stats of the specified virtual machine.
+func (c *MacOSClient) GetVirtualMachineStats(ctx context.Context, namespace, name string) (stats.ContainerStats, error) {
+	// Combined script for collecting all required stats
+	cmd := []string{
+		`cpuUsageNanoCores=$(top -l 1 | awk '/CPU usage/ {print ($3+$5)*10000000}' | sed 's/%//g')`,
+		`cpuUsageNanoCores=$(printf "%.0f" "$cpuUsageNanoCores")`,
+
+		`cpuUsageCoreNanoSeconds=$(echo "$(sysctl -n hw.ncpu) * $(( $(date +%s) - $(sysctl -n kern.boottime | awk -F'[ ,]' '{print $4}') )) * 1000000000" | bc -l)`,
+		`cpuUsageCoreNanoSeconds=$(printf "%.0f" "$cpuUsageCoreNanoSeconds")`,
+
+		`memoryUsageBytes=$(vm_stat | awk '/Pages active/ {active=$3} /Pages wired down/ {wired=$4} END {print (active+wired)*4096}')`,
+		`memoryRssBytes=$(vm_stat | awk '/Pages active/ {print $3*4096}')`,
+		`memoryWorkingSetBytes=$(vm_stat | awk '/Pages active/ {active=$3} /Pages speculative/ {speculative=$4} END {print (active-speculative)*4096}')`,
+
+		`echo "{\"cpuUsageNanoCores\": $cpuUsageNanoCores, \"cpuUsageCoreNanoSeconds\": $cpuUsageCoreNanoSeconds, \"memoryUsageBytes\": $memoryUsageBytes, \"memoryRssBytes\": $memoryRssBytes, \"memoryWorkingSetBytes\": $memoryWorkingSetBytes}"`,
+	}
+
+	// Capture command output
+	stdout := &bytes.Buffer{}
+	buf := vzio.NewBufferWriteCloser(stdout)
+	attach := node.NewExecIO(false, nil, buf, buf, nil)
+
+	// Execute the script in the VM
+	if err := c.ExecInVirtualMachine(ctx, namespace, name, cmd, attach); err != nil {
+		return stats.ContainerStats{}, fmt.Errorf("error executing script: %w", err)
+	}
+
+	// Parse JSON output
+	statsData, err := parseStatsJSON(stdout.Bytes())
+	if err != nil {
+		return stats.ContainerStats{}, fmt.Errorf("error parsing JSON output: %w", err)
+	}
+
+	// Prepare stats.ContainerStats
+	time := metav1.NewTime(time.Now())
+	return stats.ContainerStats{
+		CPU: &stats.CPUStats{
+			Time:                 time,
+			UsageNanoCores:       statsData.CPUUsageNanoCores,
+			UsageCoreNanoSeconds: statsData.CPUUsageCoreNanoSeconds,
+		},
+		Memory: &stats.MemoryStats{
+			Time:            time,
+			UsageBytes:      statsData.MemoryUsageBytes,
+			WorkingSetBytes: statsData.MemoryWorkingSetBytes,
+			RSSBytes:        statsData.MemoryRSSBytes,
+		},
+	}, nil
+}
+
+type vmStatsData struct {
+	CPUUsageNanoCores       json.Number `json:"cpuUsageNanoCores"`
+	CPUUsageCoreNanoSeconds json.Number `json:"cpuUsageCoreNanoSeconds"`
+	MemoryUsageBytes        json.Number `json:"memoryUsageBytes"`
+	MemoryRSSBytes          json.Number `json:"memoryRssBytes"`
+	MemoryWorkingSetBytes   json.Number `json:"memoryWorkingSetBytes"`
+}
+
+type parsedVMStatsData struct {
+	CPUUsageNanoCores       *uint64 `json:"cpuUsageNanoCores"`
+	CPUUsageCoreNanoSeconds *uint64 `json:"cpuUsageCoreNanoSeconds"`
+	MemoryUsageBytes        *uint64 `json:"memoryUsageBytes"`
+	MemoryRSSBytes          *uint64 `json:"memoryRssBytes"`
+	MemoryWorkingSetBytes   *uint64 `json:"memoryWorkingSetBytes"`
+}
+
+func parseStatsJSON(data []byte) (*parsedVMStatsData, error) {
+	// Unmarshal into intermediate structure
+	var statsData vmStatsData
+	if err := json.Unmarshal(data, &statsData); err != nil {
+		return nil, err
+	}
+
+	// Conversion function for json.Number to *uint64
+	convert := func(num json.Number) (*uint64, error) {
+		val, err := num.Int64()
+		if err != nil {
+			return nil, err
+		}
+		uval := uint64(val)
+		return &uval, nil
+	}
+
+	// Populate the final ParsedVMStatsData struct
+	parsedData := &parsedVMStatsData{}
+	var err error
+
+	if parsedData.CPUUsageNanoCores, err = convert(statsData.CPUUsageNanoCores); err != nil {
+		return nil, fmt.Errorf("cpuUsageNanoCores: %w", err)
+	}
+	if parsedData.CPUUsageCoreNanoSeconds, err = convert(statsData.CPUUsageCoreNanoSeconds); err != nil {
+		return nil, fmt.Errorf("cpuUsageCoreNanoSeconds: %w", err)
+	}
+	if parsedData.MemoryUsageBytes, err = convert(statsData.MemoryUsageBytes); err != nil {
+		return nil, fmt.Errorf("memoryUsageBytes: %w", err)
+	}
+	if parsedData.MemoryRSSBytes, err = convert(statsData.MemoryRSSBytes); err != nil {
+		return nil, fmt.Errorf("memoryRssBytes: %w", err)
+	}
+	if parsedData.MemoryWorkingSetBytes, err = convert(statsData.MemoryWorkingSetBytes); err != nil {
+		return nil, fmt.Errorf("memoryWorkingSetBytes: %w", err)
+	}
+
+	return parsedData, nil
 }
 
 // getVirtualMachineInfo retrieves the virtual machine information.

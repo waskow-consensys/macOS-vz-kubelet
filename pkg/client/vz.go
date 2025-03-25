@@ -22,6 +22,7 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
+	stats "k8s.io/kubelet/pkg/apis/stats/v1alpha1"
 
 	docker "github.com/moby/moby/client"
 	corev1 "k8s.io/api/core/v1"
@@ -477,6 +478,33 @@ func (c *VzClientAPIs) AttachToContainer(ctx context.Context, namespace, podName
 	}
 
 	return c.MacOSClient.ExecInVirtualMachine(ctx, namespace, podName, nil, attach)
+}
+
+func (c *VzClientAPIs) GetVirtualizationGroupStats(ctx context.Context, namespace, name string, containers []corev1.Container) (cs []stats.ContainerStats, err error) {
+	ctx, span := trace.StartSpan(ctx, "VZClient.GetVirtualizationGroupStats")
+	defer func() {
+		span.SetStatus(err)
+		span.End()
+	}()
+
+	vmStats, err := c.MacOSClient.GetVirtualMachineStats(ctx, namespace, name)
+	if err != nil {
+		return nil, err
+	}
+
+	// vz: always assume that first container is macOS container
+	vmStats.Name = containers[0].Name
+	cs = append(cs, vmStats)
+
+	for _, container := range containers[1:] {
+		containerStats, err := c.ContainerClient.GetContainerStats(ctx, namespace, name, container.Name)
+		if err != nil {
+			return nil, err
+		}
+		cs = append(cs, containerStats)
+	}
+
+	return cs, nil
 }
 
 // getPodVolumeRoot returns the root path for the volumes of a pod
