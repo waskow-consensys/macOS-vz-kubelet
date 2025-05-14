@@ -14,14 +14,14 @@ const (
 	// MediaTypeAuxImage specifies the media type for an auxiliary (nvram) image.
 	MediaTypeAuxImage MediaType = "application/vnd.agoda.macosvz.aux.image.v1"
 
-	// mediaTypeConfigV1 specifies the media type for a configuration.
+	// MediaTypeConfigV1 specifies the media type for a configuration.
 	// Internal use only.
-	mediaTypeConfigV1 MediaType = "application/vnd.agoda.macosvz.config.v1+json"
+	MediaTypeConfigV1 MediaType = "application/vnd.agoda.macosvz.config.v1+json"
 )
 
 // mediaTypeToTitle maps media types to their titles.
 var mediaTypeToTitle = map[MediaType]string{
-	mediaTypeConfigV1:  "config.json",
+	MediaTypeConfigV1:  "config.json",
 	MediaTypeDiskImage: "disk.img",
 	MediaTypeAuxImage:  "aux.img",
 }
@@ -33,7 +33,7 @@ func (mt MediaType) Title() string {
 
 // supportedMediaTypes contains the supported media types.
 var supportedMediaTypes = sets.NewString(
-	string(mediaTypeConfigV1),
+	string(MediaTypeConfigV1),
 	string(MediaTypeDiskImage),
 	string(MediaTypeAuxImage),
 )

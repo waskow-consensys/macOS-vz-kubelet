@@ -5,6 +5,8 @@ RELEASE_PROVISION_PROFILE_PATH ?= ""
 
 include makefiles/go.mk
 
+e2e-test: GOTESTARGS += --namespace e2e $(if $(IMAGE),--image $(IMAGE)) --pod-creation-timeout 10m -exec $(realpath $(dir $(firstword $(MAKEFILE_LIST)))/makefiles/scripts/sign-and-run.sh)
+
 .PHONY: snapshot release
 
 snapshot:

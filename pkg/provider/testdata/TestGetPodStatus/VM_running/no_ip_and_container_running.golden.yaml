@@ -36,5 +36,4 @@ containerStatuses:
       startedAt: "2012-12-12T12:11:12Z"
 hostIP: 10.0.0.1
 phase: Pending
-qosClass: BestEffort
 startTime: "2012-12-12T12:11:12Z"

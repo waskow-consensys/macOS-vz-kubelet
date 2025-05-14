@@ -14,7 +14,7 @@ type Config struct {
 // NewMacOSConfig creates a new Bundle tailored for macOS OCI images.
 func NewMacOSConfig(hardwareModelData, machineIdData string) Config {
 	return Config{
-		MediaType:         mediaTypeConfigV1,
+		MediaType:         MediaTypeConfigV1,
 		OS:                "darwin",
 		HardwareModelData: hardwareModelData,
 		MachineIdData:     machineIdData,

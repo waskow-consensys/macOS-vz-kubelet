@@ -26,4 +26,3 @@ containerStatuses:
       reason: Starting
 hostIP: 10.0.0.1
 phase: Pending
-qosClass: BestEffort

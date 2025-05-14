@@ -1,9 +1,30 @@
 stages:
   - test
+  - e2e-test
   - build
   - release
 
+.cache_mod: &cache_mod
+  key:
+    files:
+      - go.mod
+      - go.sum
+  paths:
+    - .go/pkg/mod/
+
+.cache_mise: &cache_mise
+  key:
+    files:
+      - .mise.toml
+  paths:
+    - .mise
+
 default:
+  cache:
+    - <<: *cache_mod
+      policy: pull-push
+    - <<: *cache_mise
+      policy: pull-push
   # All jobs are interruptible.
   # If any job must be uninterruptible, override this flag at the job level
   # `interruptible: false`
@@ -11,9 +32,10 @@ default:
 
 variables:
   APP_NAME: "MacOSVK"
+  IMAGE: "macos-sonoma-runner:15.0.1"
 
 .go-build-macos:
-  image: macos-sonoma-runner:15.0.1
+  image: "$IMAGE"
   tags:
     - macos.medium
   variables:
@@ -29,18 +51,6 @@ variables:
       mise install
       eval "$(mise activate bash --shims)"
       printf "\e[0Ksection_end:%s:prepare_go\r\e[0K\n" "$(date +%s)"
-  cache:
-    - key:
-        files:
-          - go.mod
-          - go.sum
-      paths:
-        - .go/pkg/mod/
-    - key:
-        files:
-          - .mise.toml
-      paths:
-        - .mise
 
 .go-coverage:
   variables:
@@ -52,10 +62,15 @@ variables:
   after_script:
     - |
       printf "\e[0Ksection_start:%s:codecov[collapsed=false]\r\e[0K%s\n" "$(date +%s)" "Upload coverage to Codecov"
-      mv "$CODECOV_CONFIG" "$CI_PROJECT_DIR/codecov.yml"
+      curl -fsSLO "${CODECOV_URL:-https://codecov.io}/uploader/macos/codecov"
+      sudo chmod +x codecov
+
       args=""
       if [ -n "${CODECOV_TOKEN}" ]; then
         args="$args -t ${CODECOV_TOKEN}"
+      fi
+      if [ -n "${CODECOV_URL}" ]; then
+        args="$args -u ${CODECOV_URL}"
       fi
       if [ -n "${CODECOV_FILE}" ]; then
         args="$args -f ${CODECOV_FILE}"
@@ -63,7 +78,8 @@ variables:
       if [ -n "${CODECOV_FLAG}" ]; then
         args="$args -F ${CODECOV_FLAG}"
       fi
-      bash <(curl -s ${CODECOV_URL:-https://codecov.io}/bash) $args
+
+      eval "./codecov $args"
       printf "\e[0Ksection_end:%s:codecov\r\e[0K\n" "$(date +%s)"
   artifacts:
     reports:
@@ -96,6 +112,40 @@ test:
   script:
     - make integration-test coverage
 
+e2e-test:
+  extends:
+    - .go-build-macos
+    - .go-coverage
+  tags:
+    - macOS-vz-kubelet-e2e
+  stage: e2e-test
+  needs: []
+  dependencies: []
+  # Issue with .go directory permissions on the baremetal
+  hooks:
+    pre_get_sources_script:
+      - chmod -R u+w "$CI_PROJECT_DIR"
+  # Pull only cache due to a nature of baremetal
+  cache:
+    - <<: *cache_mod
+      policy: pull
+    - <<: *cache_mise
+      policy: pull
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    # Allow running precheck manually on a draft.
+    # https://gitlab.com/gitlab-org/gitlab/-/issues/275981
+    - if: '$CI_MERGE_REQUEST_TITLE =~ /(?i)^Draft:/'
+      when: manual
+    - if: $CI_MERGE_REQUEST_ID
+  variables:
+    APISERVER_CA_CERT_LOCATION: "/Users/master/.fleet/fleetd/volumes/kubelet/ca.crt"
+    APISERVER_CERT_LOCATION: "/Users/master/.fleet/fleetd/volumes/kubelet/tls.crt"
+    APISERVER_KEY_LOCATION: "/Users/master/.fleet/fleetd/volumes/kubelet/tls.key"
+    VZ_SSH_USER: "master"
+  script:
+    - make e2e-test coverage
+
 .build:
   extends:
     - .go-build-macos
@@ -104,7 +154,8 @@ test:
     APPLE_DEVELOPER_ID_INTERMEDIATE_CERT_G2_URL: "https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer"
     SPACESHIP_SKIP_2FA_UPGRADE: 1 # Skip 2FA upgrade for fastlane
   cache:
-    - !reference [.go-build-macos, cache]
+    - <<: *cache_mod
+    - <<: *cache_mise
     - key:
         files:
           - Gemfile.lock

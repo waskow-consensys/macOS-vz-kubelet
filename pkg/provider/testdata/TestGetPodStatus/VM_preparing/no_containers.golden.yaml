@@ -26,4 +26,3 @@ containerStatuses:
       reason: Downloading
 hostIP: 10.0.0.1
 phase: Pending
-qosClass: BestEffort

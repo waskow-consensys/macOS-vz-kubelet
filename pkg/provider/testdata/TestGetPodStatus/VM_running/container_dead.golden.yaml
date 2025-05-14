@@ -40,5 +40,4 @@ containerStatuses:
 hostIP: 10.0.0.1
 phase: Unknown
 podIP: 10.0.0.3
-qosClass: BestEffort
 startTime: "2012-12-12T12:11:12Z"

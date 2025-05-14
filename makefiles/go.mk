@@ -111,7 +111,7 @@ integration-test-go:
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" $(GOTEST) -v -count 1 $(GOTESTPKG) $(GOTESTARGS)
 
 e2e-test-go:
-	$(GOTEST) -v -count 1 ./e2e $(GOTESTARGS)
+	$(GOTEST) -v -count 1 ./e2e_test $(GOTESTARGS)
 
 mutation-test-go: $(GOMUTEST)
 	$(GOMUTEST) unleash $(GOMUTESTARGS)

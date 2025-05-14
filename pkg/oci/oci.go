@@ -374,7 +374,7 @@ func (s *Store) Set(ctx context.Context, cfg Config) (ocispec.Descriptor, error)
 	}
 
 	// check the status of the name
-	name := mediaTypeConfigV1.Title()
+	name := MediaTypeConfigV1.Title()
 	status := s.status(name)
 	status.Lock()
 	defer status.Unlock()
@@ -385,7 +385,7 @@ func (s *Store) Set(ctx context.Context, cfg Config) (ocispec.Descriptor, error)
 
 	desc, err := s.descriptorFromConfig(ctx, cfg)
 	if err != nil {
-		return ocispec.Descriptor{}, fmt.Errorf("failed to create descriptor for %s: %w", mediaTypeConfigV1.Title(), err)
+		return ocispec.Descriptor{}, fmt.Errorf("failed to create descriptor for %s: %w", MediaTypeConfigV1.Title(), err)
 	}
 
 	// update the name status as existed
@@ -450,9 +450,9 @@ func (s *Store) GetConfig(ctx context.Context) (cfg Config, err error) {
 		return cfg, ErrStoreClosed
 	}
 
-	path, err := s.GetFilePathForMediaType(ctx, mediaTypeConfigV1)
+	path, err := s.GetFilePathForMediaType(ctx, MediaTypeConfigV1)
 	if err != nil {
-		return Config{}, fmt.Errorf("failed to get file path for media type %s: %w", mediaTypeConfigV1, err)
+		return Config{}, fmt.Errorf("failed to get file path for media type %s: %w", MediaTypeConfigV1, err)
 	}
 
 	fp, err := os.Open(path)
