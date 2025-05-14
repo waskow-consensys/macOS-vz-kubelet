@@ -119,7 +119,6 @@ func (p *MacOSVZProvider) buildPodStatus(_ context.Context, vg *client.Virtualiz
 		PodIP:             podIp,
 		StartTime:         startTime,
 		ContainerStatuses: containerStatuses,
-		QOSClass:          corev1.PodQOSBestEffort,
 	}
 }
 
